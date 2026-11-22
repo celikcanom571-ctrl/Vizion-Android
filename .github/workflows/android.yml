@@ -1,15 +1,20 @@
 
-name: VIZION APK Build
+name: VIZION APK Derlemesi
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Projeyi indir
@@ -21,31 +26,39 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK kur
-        uses: android-actions/setup-android@v3
-
-      - name: Android paketlerini yükle
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Gradle kur
+      - name: Gradle 8.9 kur
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
+      - name: Android SDK paketlerini kur
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort -V | tail -n 1)"
+          if [ -z "$SDKMANAGER" ]; then
+            echo "Android SDK yöneticisi bulunamadı."
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
       - name: ZIP dosyasını çıkar
         run: |
-          mkdir project
+          mkdir -p project
           unzip -q VIZION_Android_Proje_Baslangic.zip -d project
 
       - name: APK oluştur
         run: |
-          cd project
-          PROJECT_DIR=$(find . -name settings.gradle -printf '%h\n' | head -n 1)
-          cd "$PROJECT_DIR"
-          gradle assembleDebug
+          PROJECT_DIR="$(find project -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "settings.gradle dosyası bulunamadı."
+            exit 1
+          fi
+          echo "Proje klasörü: $PROJECT_DIR"
+          gradle -p "$PROJECT_DIR" assembleDebug
 
       - name: APK dosyasını kaydet
         uses: actions/upload-artifact@v4
         with:
           name: VIZION-APK
           path: project/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
