@@ -1,0 +1,51 @@
+
+name: VIZION APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Projeyi indir
+        uses: actions/checkout@v4
+
+      - name: Java 17 kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK kur
+        uses: android-actions/setup-android@v3
+
+      - name: Android paketlerini yükle
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Gradle kur
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: ZIP dosyasını çıkar
+        run: |
+          mkdir project
+          unzip -q VIZION_Android_Proje_Baslangic.zip -d project
+
+      - name: APK oluştur
+        run: |
+          cd project
+          PROJECT_DIR=$(find . -name settings.gradle -printf '%h\n' | head -n 1)
+          cd "$PROJECT_DIR"
+          gradle assembleDebug
+
+      - name: APK dosyasını kaydet
+        uses: actions/upload-artifact@v4
+        with:
+          name: VIZION-APK
+          path: project/**/build/outputs/apk/debug/*.apk
